@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Mondriandom - Random Mondrian Generator</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@300;400&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            body {
+                font-family:
+                    "Josefin Sans", "Helvetica Neue", Arial, sans-serif;
+                /* Gallery wall texture - warm off-white with subtle noise */
+                background-color: #e8e4df;
+                background-image:
+                    radial-gradient(
+                        ellipse at 50% 0%,
+                        rgba(255, 255, 255, 0.3) 0%,
+                        transparent 60%
+                    ),
+                    url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23noise)' opacity='0.08'/%3E%3C/svg%3E");
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                min-height: 100vh;
+                padding: 40px 20px;
+            }
+
+            h1 {
+                margin-bottom: 30px;
+                font-size: 2.2rem;
+                font-weight: 300;
+                letter-spacing: 0.4em;
+                text-transform: uppercase;
+                color: #2a2a2a;
+            }
+
+            /* Museum frame effect */
+            .frame-outer {
+                background: linear-gradient(
+                    145deg,
+                    #8b7355 0%,
+                    #5c4a32 50%,
+                    #3d3024 100%
+                );
+                padding: 20px;
+                box-shadow:
+                    0 10px 40px rgba(0, 0, 0, 0.4),
+                    inset 0 2px 4px rgba(255, 255, 255, 0.1),
+                    inset 0 -2px 4px rgba(0, 0, 0, 0.2);
+            }
+
+            .frame-inner {
+                background: linear-gradient(145deg, #6b5a45 0%, #4a3c2d 100%);
+                padding: 8px;
+                box-shadow:
+                    inset 0 2px 8px rgba(0, 0, 0, 0.4),
+                    inset 0 -1px 2px rgba(255, 255, 255, 0.05);
+            }
+
+            .canvas-wrapper {
+                border: 6px solid #1a1a1a;
+                box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.1);
+            }
+
+            #canvas {
+                width: 65vw;
+                height: 65vh;
+                max-width: 900px;
+                max-height: 700px;
+                background-color: #000;
+                display: grid;
+                grid-template-columns: repeat(16, 1fr);
+                grid-template-rows: repeat(16, 1fr);
+                gap: 4px;
+                cursor: pointer;
+                padding: 4px;
+            }
+
+            .cell {
+                background-color: #ffffff;
+                transition: opacity 0.1s;
+            }
+
+            .cell:hover {
+                opacity: 0.95;
+            }
+
+            .museum-label {
+                margin-top: 20px;
+                padding: 15px 30px;
+                background-color: #faf9f7;
+                border: 1px solid #d4d0c8;
+                text-align: left;
+                max-width: 350px;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+
+            .museum-label h2 {
+                font-size: 0.9rem;
+                font-weight: 400;
+                letter-spacing: 0.05em;
+                color: #2a2a2a;
+                margin-bottom: 5px;
+            }
+
+            .museum-label p {
+                font-size: 0.75rem;
+                color: #666;
+                font-style: italic;
+            }
+
+            .download-link {
+                margin-top: 15px;
+                font-size: 0.75rem;
+                color: #888;
+                text-decoration: none;
+                letter-spacing: 0.1em;
+                transition: color 0.2s ease;
+                cursor: pointer;
+            }
+
+            .download-link:hover {
+                color: #2a2a2a;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Mondriandom</h1>
+
+        <div class="frame-outer">
+            <div class="frame-inner">
+                <div class="canvas-wrapper">
+                    <div id="canvas"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="museum-label">
+            <h2>Composition in Red, Blue, and Yellow</h2>
+            <p>Generated digital composition, click to refresh</p>
+        </div>
+
+        <a class="download-link" id="downloadLink">Download Image</a>
+
+        <script>
+            // Mondrian palette - includes black for occasional filled boxes
+            const MONDRIAN_COLORS = [
+                "#ff0000",
+                "#0000ff",
+                "#ffff00",
+                "#ffffff",
+                "#000000",
+            ];
+            const RED = "#ff0000";
+            const BLUE = "#0000ff";
+            const YELLOW = "#ffff00";
+            const WHITE = "#ffffff";
+            const BLACK = "#000000";
+
+            const canvas = document.getElementById("canvas");
+            const downloadLink = document.getElementById("downloadLink");
+
+            // Grid size
+            const GRID_SIZE = 16;
+            const EXPORT_SIZE = 1200; // Export resolution in pixels
+            const LINE_WIDTH = 4; // Black line thickness in export
+
+            // Store current composition for export
+            let currentBoxes = [];
+
+            // Helper: Random integer between min and max (inclusive)
+            function randomInt(min, max) {
+                return Math.floor(Math.random() * (max - min + 1)) + min;
+            }
+
+            // Generate random Mondrian composition using recursive subdivision
+            // This guarantees 100% grid coverage with no gaps
+            function generateRandomMondrian() {
+                canvas.innerHTML = "";
+
+                const boxes = [];
+
+                // Recursive subdivision to fill the entire grid
+                function subdivide(
+                    startCol,
+                    startRow,
+                    width,
+                    height,
+                    depth = 0,
+                ) {
+                    // Base case: area is small enough to be a single box
+                    // or we've recursed enough times
+                    // minSize of 1 allows tiny boxes, increased depth creates more small boxes
+                    const minSize = 1;
+                    const shouldStop =
+                        (width <= minSize && height <= minSize) ||
+                        (depth > 4 && Math.random() < 0.4) ||
+                        depth > 6;
+
+                    if (shouldStop || (width < minSize && height < minSize)) {
+                        boxes.push({
+                            startCol,
+                            startRow,
+                            width,
+                            height,
+                            color: null,
+                        });
+                        return;
+                    }
+
+                    // Decide whether to split horizontally or vertically
+                    // Prefer splitting the longer dimension
+                    const splitHorizontal =
+                        width > height
+                            ? Math.random() < 0.8
+                            : height > width
+                              ? Math.random() < 0.2
+                              : Math.random() < 0.5;
+
+                    if (splitHorizontal && width > minSize) {
+                        // Split vertically (left/right)
+                        // Choose split point - bias towards golden ratio divisions
+                        const minSplit = Math.max(1, Math.floor(width * 0.2));
+                        const maxSplit = Math.min(
+                            width - 1,
+                            Math.floor(width * 0.8),
+                        );
+                        let splitPoint;
+
+                        if (Math.random() < 0.4) {
+                            // Golden ratio split
+                            splitPoint = Math.round(
+                                width * (Math.random() < 0.5 ? 0.382 : 0.618),
+                            );
+                        } else {
+                            splitPoint = randomInt(minSplit, maxSplit);
+                        }
+                        splitPoint = Math.max(
+                            1,
+                            Math.min(width - 1, splitPoint),
+                        );
+
+                        subdivide(
+                            startCol,
+                            startRow,
+                            splitPoint,
+                            height,
+                            depth + 1,
+                        );
+                        subdivide(
+                            startCol + splitPoint,
+                            startRow,
+                            width - splitPoint,
+                            height,
+                            depth + 1,
+                        );
+                    } else if (!splitHorizontal && height > minSize) {
+                        // Split horizontally (top/bottom)
+                        const minSplit = Math.max(1, Math.floor(height * 0.2));
+                        const maxSplit = Math.min(
+                            height - 1,
+                            Math.floor(height * 0.8),
+                        );
+                        let splitPoint;
+
+                        if (Math.random() < 0.4) {
+                            // Golden ratio split
+                            splitPoint = Math.round(
+                                height * (Math.random() < 0.5 ? 0.382 : 0.618),
+                            );
+                        } else {
+                            splitPoint = randomInt(minSplit, maxSplit);
+                        }
+                        splitPoint = Math.max(
+                            1,
+                            Math.min(height - 1, splitPoint),
+                        );
+
+                        subdivide(
+                            startCol,
+                            startRow,
+                            width,
+                            splitPoint,
+                            depth + 1,
+                        );
+                        subdivide(
+                            startCol,
+                            startRow + splitPoint,
+                            width,
+                            height - splitPoint,
+                            depth + 1,
+                        );
+                    } else {
+                        // Can't split further, make it a box
+                        boxes.push({
+                            startCol,
+                            startRow,
+                            width,
+                            height,
+                            color: null,
+                        });
+                    }
+                }
+
+                // Start subdivision from full grid
+                subdivide(0, 0, GRID_SIZE, GRID_SIZE);
+
+                // Assign colors to boxes
+                // Mondrian typically has: ~60-75% white, with primary color accents
+                // Larger boxes more likely to be colored
+                const totalArea = GRID_SIZE * GRID_SIZE;
+                let coloredArea = 0;
+                const targetColoredRatio = 0.25 + Math.random() * 0.15; // 25-40% colored
+
+                // Sort boxes by area (largest first) for color assignment
+                const sortedBoxes = [...boxes].sort(
+                    (a, b) => b.width * b.height - a.width * a.height,
+                );
+
+                // Track guaranteed colors
+                let hasRed = false;
+                let hasBlue = false;
+                let hasYellow = false;
+
+                // Determine number of black boxes (1-5)
+                const targetBlackBoxes = randomInt(1, 5);
+                let blackBoxCount = 0;
+
+                // Assign colors
+                for (const box of sortedBoxes) {
+                    const boxArea = box.width * box.height;
+                    const currentRatio = coloredArea / totalArea;
+
+                    // Probability of being colored decreases as we approach target
+                    // Larger boxes more likely to get color
+                    const sizeFactor = Math.min(1, boxArea / 6);
+                    const colorProb =
+                        Math.max(0, (targetColoredRatio - currentRatio) * 2) *
+                        (0.3 + sizeFactor * 0.7);
+
+                    if (Math.random() < colorProb) {
+                        // Assign a primary color
+                        if (!hasRed && Math.random() < 0.4) {
+                            box.color = RED;
+                            hasRed = true;
+                        } else if (!hasBlue && Math.random() < 0.5) {
+                            box.color = BLUE;
+                            hasBlue = true;
+                        } else if (!hasYellow && Math.random() < 0.6) {
+                            box.color = YELLOW;
+                            hasYellow = true;
+                        } else {
+                            // Random primary color
+                            const colors = [RED, BLUE, YELLOW];
+                            // Red is often dominant in Mondrian
+                            const weights = [0.45, 0.35, 0.2];
+                            const r = Math.random();
+                            if (r < weights[0]) box.color = RED;
+                            else if (r < weights[0] + weights[1])
+                                box.color = BLUE;
+                            else box.color = YELLOW;
+                        }
+                        coloredArea += boxArea;
+                    } else {
+                        box.color = WHITE;
+                    }
+                }
+
+                // Ensure at least one of each primary color
+                let whiteBoxes = boxes.filter((b) => b.color === WHITE);
+                // Sort white boxes by area for better visual balance
+                whiteBoxes.sort(
+                    (a, b) => b.width * b.height - a.width * a.height,
+                );
+
+                if (!hasRed && whiteBoxes.length > 0) {
+                    whiteBoxes[0].color = RED;
+                }
+                if (!hasBlue && whiteBoxes.length > 1) {
+                    whiteBoxes[1].color = BLUE;
+                }
+                if (!hasYellow && whiteBoxes.length > 2) {
+                    whiteBoxes[2].color = YELLOW;
+                }
+
+                // Add black boxes (1-5) - pick from remaining white boxes
+                // Prefer smaller boxes for black
+                whiteBoxes = boxes.filter((b) => b.color === WHITE);
+                whiteBoxes.sort(
+                    (a, b) => a.width * a.height - b.width * b.height,
+                );
+
+                for (
+                    let i = 0;
+                    i < targetBlackBoxes && i < whiteBoxes.length;
+                    i++
+                ) {
+                    whiteBoxes[i].color = BLACK;
+                }
+
+                // Store for export
+                currentBoxes = boxes;
+
+                // Render boxes
+                boxes.forEach((box) => {
+                    const cell = document.createElement("div");
+                    cell.className = "cell";
+                    cell.style.gridColumn = `${box.startCol + 1} / span ${box.width}`;
+                    cell.style.gridRow = `${box.startRow + 1} / span ${box.height}`;
+                    cell.style.backgroundColor = box.color;
+                    canvas.appendChild(cell);
+                });
+            }
+
+            // Download current composition as JPG
+            function downloadImage() {
+                const exportCanvas = document.createElement("canvas");
+                exportCanvas.width = EXPORT_SIZE;
+                exportCanvas.height = EXPORT_SIZE;
+                const ctx = exportCanvas.getContext("2d");
+
+                const cellSize = EXPORT_SIZE / GRID_SIZE;
+
+                // Fill background with black (for grid lines)
+                ctx.fillStyle = "#000000";
+                ctx.fillRect(0, 0, EXPORT_SIZE, EXPORT_SIZE);
+
+                // Draw each box
+                currentBoxes.forEach((box) => {
+                    const x = box.startCol * cellSize + LINE_WIDTH / 2;
+                    const y = box.startRow * cellSize + LINE_WIDTH / 2;
+                    const w = box.width * cellSize - LINE_WIDTH;
+                    const h = box.height * cellSize - LINE_WIDTH;
+
+                    ctx.fillStyle = box.color;
+                    ctx.fillRect(x, y, w, h);
+                });
+
+                // Convert to JPG and download
+                const link = document.createElement("a");
+                link.download = "mondrian-composition.jpg";
+                link.href = exportCanvas.toDataURL("image/jpeg", 0.95);
+                link.click();
+            }
+
+            // Event listeners
+            canvas.addEventListener("click", generateRandomMondrian);
+            downloadLink.addEventListener("click", downloadImage);
+
+            // Generate initial random composition on page load
+            generateRandomMondrian();
+        </script>
+    </body>
+</html>
